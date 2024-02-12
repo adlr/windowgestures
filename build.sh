@@ -1,7 +1,11 @@
 #!/bin/sh
 
 ## compile schemas
-cd src
+mkdir -p build
+cd build
+grep -v '@girs' ../src/extension.js > extension.js
+cp -Rp ../src/pixelProcessor.* ./
+cp -Rp ../src/schemas ./schemas
 
 ## Remove compiled schemas
 rm schemas/gschemas.compiled
