@@ -54,11 +54,11 @@ class BuiltinGesturesUseFourFingers {
 
     enable() {
         this._swipeMods = [
-            Main.overview._swipeTracker._touchpadGesture,
+            //Main.overview._swipeTracker._touchpadGesture,
             // @ts-ignore
             Main.wm._workspaceAnimation._swipeTracker._touchpadGesture,
-            Main.overview._overview._controls._workspacesDisplay._swipeTracker
-                ._touchpadGesture,
+            // Main.overview._overview._controls._workspacesDisplay._swipeTracker
+            //     ._touchpadGesture,
             // Main.overview._overview._controls._appDisplay._swipeTracker._touchpadGesture
         ];
 
@@ -181,6 +181,8 @@ class Manager {
         const phase = event.get_gesture_phase();
         log(`Movement: ${event.get_gesture_motion_delta()}, phase ${phase}`);
         if (phase === Clutter.TouchpadGesturePhase.BEGIN) {
+            if (Main.actionMode != Shell.ActionMode.NORMAL)
+                return Clutter.EVENT_PROPAGATE;
             const pp = new PixelProcessor();
             log(`PP says ${pp.getVal()}`);
             this._mode = Mode.PENDING;
