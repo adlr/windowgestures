@@ -4,6 +4,7 @@
 mkdir -p build
 cd build
 grep -v '@girs' ../src/extension.js > extension.js
+cp -p ../src/metadata.json ./
 cp -Rp ../src/pixelProcessor.* ./
 cp -Rp ../src/schemas ./schemas
 
