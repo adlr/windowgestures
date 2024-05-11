@@ -1,9 +1,9 @@
 {
-  "name": "Window Gestures",
-  "description": "Manage window with touchpad gestures",
-  "uuid": "windowgestures@extension.amarullz.com",
-  "url": "https://github.com/amarullz/windowgestures",
-  "settings-schema": "org.gnome.shell.extensions.windowgestures",
+  "name": "Three Finger Tab Switching",
+  "description": "Three finger tab switching",
+  "uuid": "threefingertabswitching@adlr.info",
+  "url": "https://github.com/adlr/windowgestures",
+  "settings-schema": "org.gnome.shell.extensions.threefingertabswitching",
   "shell-version": [
     "45",
     "46"
