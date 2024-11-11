@@ -1,2 +1,4 @@
 /src/schemas/gschemas.compiled
 /windowgestures@extension.amarullz.com.zip
+node_modules/*
+build/*

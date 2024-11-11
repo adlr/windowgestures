@@ -257,19 +257,20 @@ class TabSwitchGesture {
         }
 
         const framerect = focused_window.get_frame_rect();  // The window part, not including shadow
-        log(`Frame size: ${framerect.width}, ${framerect.height}`);
+        log(`Frame size: ${framerect.x}, ${framerect.y}, ${framerect.width}, ${framerect.height}`);
 
         const wa = focused_actors[0];  // Includes full surface with shadows
-        //log('wa: ' + wa.x + ', ' + wa.y + ', ' + wa.width + ', ' + wa.height);
+        log('wa: ' + wa.x + ', ' + wa.y + ', ' + wa.width + ', ' + wa.height);
+        log(`scale: ${wa.scale_x}, ${wa.scale_x}, ${wa.get_resource_scale()}`);
         const rect = Mtk.Rectangle.new(
         //new Cairo.RectangleInt({  // What we'll get a screenshot of
             /*x:*/ framerect.x - wa.x,
             /*y:*/ framerect.y - wa.y,
-            /*width:*/ framerect.width,
-            /*height:*/ Math.min(framerect.height, 101));
+            /*width:*/ framerect.width * wa.get_resource_scale(),
+            /*height:*/ Math.min(framerect.height, 101) * wa.get_resource_scale());
         //});
         //log('rect: ' + rect.x + ', ' + rect.y + ', ' + rect.width + ', ' + rect.height);
-        const surface = wa.get_image(rect);
+        const surface = wa.get_image(/*rect*/ null);  // Does this leak?
 
         if (surface === null) {
             log('no surface!');
@@ -277,6 +278,7 @@ class TabSwitchGesture {
         }
         log(`Got image: ${rect.x}, ${rect.y}, ${rect.width}, ${rect.height}`);
         const pixbuf = Gdk.pixbuf_get_from_surface(surface, 0, 0, rect.width, rect.height);
+        //cairo_surface_destroy(surface);
         if (pixbuf === null) {
             log('no pixbuf!');
             return;
