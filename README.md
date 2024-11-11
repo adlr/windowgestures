@@ -64,3 +64,9 @@ My Window Gestures are distributed under the terms of the GNU General
 Public License, version 2 or later. See the [license](COPYING) for details.
 Individual extensions may be licensed under different terms, see each source
 file for details.
+
+## Notes:
+
+https://www.roojs.org/seed/gir-1.2-gtk-3.0/seed/Atspi.html - a11y docs
+
+https://github.com/infapi00/at-spi2-examples.git - a11y examples
