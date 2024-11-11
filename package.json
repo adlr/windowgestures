@@ -1,9 +1,7 @@
 {
   "dependencies": {
-    "@girs/clutter-13": "^13.0.0-3.2.7",
-    "typescript": "^5.3.3"
-  },
-  "devDependencies": {
-    "@girs/gnome-shell": "^45.0.0-beta9"
+    "@girs/clutter-15": "*",
+    "@girs/gnome-shell": "~47.0.0",
+    "typescript": "*"
   }
 }
