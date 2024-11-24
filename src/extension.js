@@ -32,14 +32,26 @@ import Atspi from 'gi://Atspi';
 // import Shell from 'gi://Shell';
 // import Gio from 'gi://Gio';
 
+function log(msg) { }  // @girs
+/**
+ * @type {Shell.Global}
+ */
+let global;  // @girs
+
+const DEBUG = false;
+let debug = undefined;
+if (DEBUG) {
+    debug = s => log(s);
+}
+
 const MyActor = GObject.registerClass(
     class MyActor extends Clutter.Actor {
         // _init(x) {
         //     super._init(x);
         // }
         vfunc_paint(ctx) {
-            console.log("Paint!");
-            console.log(ctx);
+            debug?.("Paint!");
+            debug?.(ctx);
         }
     }
 );
@@ -57,11 +69,6 @@ const Mode = {
 
 const NUM_FINGERS = 3;
 
-function log(msg) { }  // @girs
-/**
- * @type {Shell.Global}
- */
-let global;  // @girs
 
 
 // From https://github.com/icedman/swap-finger-gestures-3-4/blob/main/extension.js
@@ -158,22 +165,22 @@ class Manager {
      * @returns {boolean}
      */
     _touchpadEvent(actor, event) {
-        //log("_touchpadEvent = " + event.type());
+        //debug?.("_touchpadEvent = " + event.type());
 
         // Process swipe
         if (event.type() == Clutter.EventType.TOUCHPAD_SWIPE) {
-            log(`Swipe event`);
+            debug?.(`Swipe event`);
             let ret = this._swipeHandler(actor, event);
             switch (ret) {
                 case Clutter.EVENT_PROPAGATE:
-                    log("-> prop -> stop");
+                    debug?.("-> prop -> stop");
                     ret = Clutter.EVENT_STOP;
                     break;
                 case Clutter.EVENT_STOP:
-                    log("-> stop");
+                    debug?.("-> stop");
                     break;
                 default:
-                    log(`-> ${ret}`);
+                    debug?.(`-> ${ret}`);
                     break;
             }
             return ret;
@@ -195,12 +202,12 @@ class Manager {
         }
 
         const phase = event.get_gesture_phase();
-        log(`Movement: ${event.get_gesture_motion_delta()}, phase ${phase}`);
+        debug?.(`Movement: ${event.get_gesture_motion_delta()}, phase ${phase}`);
         if (phase === Clutter.TouchpadGesturePhase.BEGIN) {
             if (Main.actionMode != Shell.ActionMode.NORMAL)
                 return Clutter.EVENT_PROPAGATE;
             // const pp = new PixelProcessor();
-            // log(`PP says ${pp.getVal()}`);
+            // debug?.(`PP says ${pp.getVal()}`);
             this._mode = Mode.PENDING;
             this._x = 0;
             this._y = 0;
@@ -249,8 +256,8 @@ class Manager {
 }
 
 function print(str) {
-    log(str);
-}
+    debug?.(str);
+} false
 
 /**
  * Returns size (x, y, w, h) + string ("*" is selected) for the tab
@@ -306,15 +313,15 @@ function findTabDetails(node, haveWindow, pageTabListBounds, pad) {
                     const pos = child.get_position(Atspi.CoordType.WINDOW);
                     const size = child.get_size();
                     pageTabListBounds = [pos.x, pos.x + size.x];
-                    log(`Got bounds: ${pageTabListBounds}; ${size.y}`);
+                    debug?.(`Got bounds: ${pageTabListBounds}; ${size.y}`);
                 }
                 ret = findTabDetails(child, true, pageTabListBounds, np);
                 if (ret !== null) {
                     if (ret.pageTabList === null) {
                         ret.pageTabList = child.get_selection_iface();
-                        log(`SEL: ${ret.pageTabList.get_n_selected_children()}, ${ret.pageTabList}`);
+                        debug?.(`SEL: ${ret.pageTabList.get_n_selected_children()}, ${ret.pageTabList}`);
                         for (let j = 0; j < child.get_child_count(); j++) {
-                            log(`  ${j} / ${child.get_child_count()}: ${ret.pageTabList.is_child_selected(j)}`);
+                            debug?.(`  ${j} / ${child.get_child_count()}: ${ret.pageTabList.is_child_selected(j)}`);
                         }
                     }
                     break;
@@ -339,7 +346,7 @@ function findTabDetails(node, haveWindow, pageTabListBounds, pad) {
         }
         if (child.get_role() !== Atspi.Role.PAGE_TAB) {
             if (child.get_role() === Atspi.Role.PAGE_TAB_LIST) {
-                log(`${pad}Found ANOTHER page tab list`);
+                debug?.(`${pad}Found ANOTHER page tab list`);
             }
             ret = findTabDetails(child, true, pageTabListBounds, np);
             if (ret !== null) {
@@ -374,6 +381,107 @@ function findTabDetails(node, haveWindow, pageTabListBounds, pad) {
     };
 }
 
+/**
+ * 
+ * @param {Atspi.Accessible} pageTabList the Page Tab List
+ * @param {Atspi.Accessible[]} tabs The tabs
+ * @returns {null | {
+ *   tabs: [number, number, number, number][],
+ *   tabObjs: Atspi.Accessible[],
+ *   selectedIdx: number,
+ *   tabBounds: [number, number],
+ *   pageTabList: Atspi.Selection
+ * }}
+ */
+function formatFoundTabs(pageTabList, tabObjs) {
+    /**
+     * @type{[number, number, number, number][]}
+     */
+    const tabs = [];
+    let selectedIdx = -1;
+    for (let i = 0; i < tabObjs.length; i++) {
+        const r = pos(tabObjs[i]);
+        if (r[4] === "*")
+            selectedIdx = i;
+        const tab = [r[0], r[1], r[2], r[3]];
+        debug?.(`pushing ${tab}`);
+        tabs.push(tab);
+    }
+    const ptlPos = pageTabList.get_position(Atspi.CoordType.WINDOW);
+    return {
+        tabs: tabs,
+        tabObjs: tabObjs,
+        selectedIdx: selectedIdx,
+        tabBounds: [ptlPos.x, ptlPos.x + pageTabList.get_size().x],
+        pageTabList: pageTabList
+    };
+}
+
+const PAGE_TAB_LIST_MATCH_RULE = Atspi.MatchRule.new(Atspi.StateSet.new([]), Atspi.CollectionMatchType.ALL,
+    {}, Atspi.CollectionMatchType.ANY,
+    [Atspi.Role.PAGE_TAB_LIST], Atspi.CollectionMatchType.ANY,
+    [], Atspi.CollectionMatchType.ALL,
+    false
+);
+const TAB_MATCH_RULE = Atspi.MatchRule.new(Atspi.StateSet.new([]), Atspi.CollectionMatchType.ALL,
+    {}, Atspi.CollectionMatchType.ANY,
+    [Atspi.Role.PAGE_TAB], Atspi.CollectionMatchType.ANY,
+    [], Atspi.CollectionMatchType.ALL,
+    false
+);
+
+/**
+ * 
+ * @param {Atspi.Accessible} node Root node to search
+ * @param {boolean} haveWindow Window was found (set to false when starting)
+ * @param {null | [number, number]} pageTabListBounds Bounds of page tab list
+ * @param {string} pad Padding for debug prints
+ * @returns {null | {
+*   tabs: [number, number, number, number][],
+*   tabObjs: Atspi.Accessible[],
+*   selectedIdx: number,
+*   tabBounds: [number, number],
+*   pageTabList: Atspi.Selection
+* }}
+*/
+function findTabDetails2(node, haveWindow, pageTabListBounds, pad) {
+    // Find window
+    let child = null;
+    for (let i = 0; i < node.get_child_count(); i++) {
+        const test_child = node.get_child_at_index(i);
+        if (test_child !== null && test_child.get_state_set().contains(Atspi.StateType.ACTIVE)) {
+            child = test_child;
+            break;
+        }
+    }
+    if (child === null) {
+        debug?.(`No active windows found for app`);
+        return null;
+    }
+
+    const ptls = child.get_collection_iface().get_matches(PAGE_TAB_LIST_MATCH_RULE, Atspi.CollectionSortOrder.CANONICAL,
+        0, true
+    );
+    debug?.(`Got ${ptls.length} possible PTLs`);
+    for (let i = 0; i < ptls.length; i++) {
+        const ptl = ptls[i];
+        const tabs = ptl.get_collection_iface().get_matches(TAB_MATCH_RULE, Atspi.CollectionSortOrder.CANONICAL,
+            0, true
+        );
+        debug?.(`Got tabs: ${tabs}`);
+        if (tabs && tabs.length > 0) {
+            if ((i + 1) < ptls.length && tabs.length > 1 &&
+                tabs[0].get_position(Atspi.CoordType.WINDOW).x === tabs[1].get_position(Atspi.CoordType.WINDOW).x) {
+                continue;
+            }
+            // Got our answer
+            return formatFoundTabs(ptl, tabs);
+        }
+    }
+    debug?.(`returning nothing!`);
+    return null;
+}
+
 function findTabs() {
     const desktop = Atspi.get_desktop(0);
     //desktop.clear_cache();
@@ -381,9 +489,13 @@ function findTabs() {
     for (let i = 0; i < nchild; i++) {
         const app = desktop.get_child_at_index(i);
         //app.clear_cache();
-        const tabs = findTabDetails(app, false, null, "--");
-        if (tabs)
+        const start = new Date().getTime();
+        const tabs = findTabDetails2(app, false, null, "--");
+        const end = new Date().getTime();
+        if (tabs) {
+            debug?.(`TIME TO FIND TABS: ${end - start}`);
             return tabs;
+        }
     }
     return null;
 }
@@ -409,20 +521,20 @@ class TabSwitchGesture {
      * @param {boolean} movingRight 
      */
     begin(movingRight) {
-        log("Begin");
+        debug?.("Begin");
         const tabs = findTabs();
         let rect = [0, 0, 100, 100];
         if (!tabs) {
-            log(`Unable to find tabs`);
+            debug?.(`Unable to find tabs`);
             return;
         } else {
-            log(`Found tabs: ${tabs.tabs}; ${tabs.selectedIdx}; ${tabs.tabBounds}`);
+            debug?.(`Found tabs: ${tabs.tabs}; ${tabs.selectedIdx}; ${tabs.tabBounds}`);
             if (tabs.tabs.length > 0) {
                 rect = tabs.tabs[tabs.selectedIdx];
             }
         }
         if (tabs.selectedIdx < 0 || tabs.selectedIdx >= tabs.tabs.length) {
-            log("No active tab found!");
+            debug?.("No active tab found!");
             return;
         }
 
@@ -430,8 +542,10 @@ class TabSwitchGesture {
         this.tabs = tabs.tabs;
         this.tabObjs = tabs.tabObjs;
         this.selectedIdx = tabs.selectedIdx;
+        debug?.(`selected index: ${this.selectedIdx}`);
         this.pageTabList = tabs.pageTabList;
         const tab = tabs.tabs[tabs.selectedIdx];
+        debug?.(`Tabs: ${tabs.tabs}; ${tab}`);
         const HOLDBACK = 3;  // Points to hold back from the edge
         this.cursorPt = [
             movingRight ? tab[0] + tab[2] - HOLDBACK : tab[0] + HOLDBACK,
@@ -448,7 +562,7 @@ class TabSwitchGesture {
         const focused_window = global.display.get_focus_window();
         const focused_actors = actors.filter(windowactor => windowactor.meta_window === focused_window);
         if (focused_actors.length !== 1) {
-            log('Wrong number of focused windows for tab switch gesture: ' + focused_actors.length);
+            debug?.('Wrong number of focused windows for tab switch gesture: ' + focused_actors.length);
             return;
         }
         const wa = focused_actors[0];  // Includes full surface with shadows
@@ -467,9 +581,9 @@ class TabSwitchGesture {
      * @param {number} dx 
      */
     update(dx) {
-        log(`Update with ${dx}`);
+        debug?.(`Update with ${dx}`);
         this.cursor.x += dx;
-        log(`X: ${this.cursor.x}, TABS: ${this.tabs}`);
+        debug?.(`X: ${this.cursor.x}, TABS: ${this.tabs}`);
         for (let i = 0; i < this.tabs.length; i++) {
             const tab = this.tabs[i];
             if (this.cursor.x >= tab[0] && this.cursor.x <= (tab[0] + tab[2])) {
@@ -477,7 +591,7 @@ class TabSwitchGesture {
                 if (i === this.selectedIdx) {
                     break;
                 }
-                log(`MOVED TO TAB: ${i}`);
+                debug?.(`MOVED TO TAB: ${i}`);
                 this.selectedIdx = i;
                 this.actor.x = tab[0];
                 this.actor.y = tab[1];
@@ -492,28 +606,33 @@ class TabSwitchGesture {
      * @param {boolean} isCancel 
      */
     end(isCancel) {
-        log("end");
+        debug?.("end");
 
         // Check active tab
-        log(`X: ${this.cursor.x}, TABS: ${this.tabs}`);
-        for (let i = 0; i < this.tabs.length; i++) {
-            const tab = this.tabs[i];
-            if (this.cursor.x >= tab[0] && this.cursor.x <= (tab[0] + tab[2])) {
-                // Update tab
-                // if (this.pageTabList.is_child_selected(i)) {
-                //     break;
-                // }
-                log(`MOVED TO TAB: ${i}`);
-                this.pageTabList.select_child(i);
-                const action = this.tabObjs[i].get_action_iface();
-                if (action) {
-                    action.do_action(0);
-                }
-                break;
-            }
+        debug?.(`X: ${this.cursor.x}, TABS: ${this.tabs}`);
+        this.pageTabList.select_child(this.selectedIdx);
+        const action = this.tabObjs[this.selectedIdx].get_action_iface();
+        if (action) {
+            action.do_action(0);
         }
+        // for (let i = 0; i < this.tabs.length; i++) {
+        //     const tab = this.tabs[i];
+        //     if (this.cursor.x >= tab[0] && this.cursor.x <= (tab[0] + tab[2])) {
+        //         // Update tab
+        //         // if (this.pageTabList.is_child_selected(i)) {
+        //         //     break;
+        //         // }
+        //         debug?.(`MOVED TO TAB: ${i}`);
+        //         this.pageTabList.select_child(i);
+        //         const action = this.tabObjs[i].get_action_iface();
+        //         if (action) {
+        //             action.do_action(0);
+        //         }
+        //         break;
+        //     }
+        // }
 
-        log(`Done moving to new tab`);
+        debug?.(`Done moving to new tab`);
         this.actor.get_parent().remove_child(this.actor);
         this.actor = null;
         this.cursor.get_parent().remove_child(this.cursor);
