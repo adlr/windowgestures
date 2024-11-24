@@ -1,7 +1,9 @@
 {
   "dependencies": {
+    "@girs/atspi-2.0": "^2.0.0-4.0.0-beta.19",
     "@girs/clutter-15": "*",
     "@girs/gnome-shell": "~47.0.0",
+    "@girs/gobject-2.0": "^2.82.2-4.0.0-beta.19",
     "typescript": "*"
   }
 }
