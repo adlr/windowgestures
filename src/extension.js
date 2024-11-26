@@ -2,8 +2,7 @@
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 2 of the License, or
- * (at your option) any later version.
+ * the Free Software Foundation, either version 2 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -13,24 +12,19 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * SPDX-License-Identifier: GPL-2.0-or-later
+ * SPDX-License-Identifier: GPL-2.0
  */
 
 import Shell from 'gi://Shell';
 import Clutter from 'gi://Clutter';
-import GdkPixbuf from 'gi://GdkPixbuf';
-import Meta from 'gi://Meta';
-import Gdk from 'gi://Gdk';
-import Mtk from 'gi://Mtk';
-import Gio from 'gi://Gio';
+// import GdkPixbuf from 'gi://GdkPixbuf';
+// import Meta from 'gi://Meta';
+// import Gdk from 'gi://Gdk';
+// import Mtk from 'gi://Mtk';
+// import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import Cogl from 'gi://Cogl';
 import Atspi from 'gi://Atspi';
-//import { PixelProcessor } from "./pixelProcessor.mjs"
-//import Cairo from 'gi://Cairo';
-// import St from 'gi://St';
-// import Shell from 'gi://Shell';
-// import Gio from 'gi://Gio';
 
 function log(msg) { }  // @girs
 /**
@@ -68,8 +62,6 @@ const Mode = {
 };
 
 const NUM_FINGERS = 3;
-
-
 
 // From https://github.com/icedman/swap-finger-gestures-3-4/blob/main/extension.js
 class BuiltinGesturesUseFourFingers {
@@ -257,7 +249,7 @@ class Manager {
 
 function print(str) {
     debug?.(str);
-} false
+}
 
 /**
  * Returns size (x, y, w, h) + string ("*" is selected) for the tab
@@ -384,7 +376,7 @@ function findTabDetails(node, haveWindow, pageTabListBounds, pad) {
 /**
  * 
  * @param {Atspi.Accessible} pageTabList the Page Tab List
- * @param {Atspi.Accessible[]} tabs The tabs
+ * @param {Atspi.Accessible[]} tabObjs The tabs
  * @returns {null | {
  *   tabs: [number, number, number, number][],
  *   tabObjs: Atspi.Accessible[],
@@ -403,6 +395,9 @@ function formatFoundTabs(pageTabList, tabObjs) {
         const r = pos(tabObjs[i]);
         if (r[4] === "*")
             selectedIdx = i;
+        /**
+         * @type{[number, number, number, number]}
+         */
         const tab = [r[0], r[1], r[2], r[3]];
         debug?.(`pushing ${tab}`);
         tabs.push(tab);
@@ -581,6 +576,8 @@ class TabSwitchGesture {
      * @param {number} dx 
      */
     update(dx) {
+        if (this.tabs === null)
+            return;
         debug?.(`Update with ${dx}`);
         this.cursor.x += dx;
         debug?.(`X: ${this.cursor.x}, TABS: ${this.tabs}`);
@@ -606,6 +603,8 @@ class TabSwitchGesture {
      * @param {boolean} isCancel 
      */
     end(isCancel) {
+        if (this.tabs === null)
+            return;
         debug?.("end");
 
         // Check active tab
@@ -637,6 +636,9 @@ class TabSwitchGesture {
         this.actor = null;
         this.cursor.get_parent().remove_child(this.cursor);
         this.cursor = null;
+        this.tabs = null;
+        this.tabObjs = null;
+        this.pageTabList = null;
     }
 }
 
