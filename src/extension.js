@@ -18,7 +18,7 @@
 import Shell from 'gi://Shell';
 import Clutter from 'gi://Clutter';
 // import GdkPixbuf from 'gi://GdkPixbuf';
-// import Meta from 'gi://Meta';
+import Meta from 'gi://Meta';
 // import Gdk from 'gi://Gdk';
 // import Mtk from 'gi://Mtk';
 // import Gio from 'gi://Gio';
@@ -49,7 +49,6 @@ const MyActor = GObject.registerClass(
         }
     }
 );
-
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -247,10 +246,6 @@ class Manager {
 
 }
 
-function print(str) {
-    debug?.(str);
-}
-
 /**
  * Returns size (x, y, w, h) + string ("*" is selected) for the tab
  * @param {Atspi.Accessible} acc The Accessible item to get bounds of
@@ -262,115 +257,6 @@ function pos(acc) {
     const states = acc.get_state_set();
     const selected = states.contains(Atspi.StateType.SELECTED);
     return [pos.x, pos.y, size.x, size.y, selected ? "*" : ""  /*, get_states(states)*/]
-}
-
-/**
- * 
- * @param {Atspi.Accessible} node Root node to search
- * @param {boolean} haveWindow Window was found (set to false when starting)
- * @param {null | [number, number]} pageTabListBounds Bounds of page tab list
- * @param {string} pad Padding for debug prints
- * @returns {null | {
- *   tabs: [number, number, number, number][],
- *   tabObjs: Atspi.Accessible[],
- *   selectedIdx: number,
- *   tabBounds: [number, number],
- *   pageTabList: Atspi.Selection
- * }}
- */
-function findTabDetails(node, haveWindow, pageTabListBounds, pad) {
-    const np = pad + "  ";
-    if (!haveWindow) {
-        print(`${pad}looking for window`);
-        // Try to find the window first
-        let ret = null;
-        for (let i = 0; i < node.get_child_count(); i++) {
-            const child = node.get_child_at_index(i);
-            if (child !== null && child.get_state_set().contains(Atspi.StateType.ACTIVE)) {
-                print(`${pad}found window`);
-                ret = findTabDetails(child, true, null, np);
-                break;
-            }
-        }
-        return ret;
-    }
-    if (pageTabListBounds === null) {
-        print(`${pad}Looking for page tab list`);
-        let ret = null;
-        for (let i = 0; i < node.get_child_count(); i++) {
-            const child = node.get_child_at_index(i);
-            if (child !== null) {
-                // print(`${pad}found PTL`);
-                if (child.get_role() === Atspi.Role.PAGE_TAB_LIST) {
-                    const pos = child.get_position(Atspi.CoordType.WINDOW);
-                    const size = child.get_size();
-                    pageTabListBounds = [pos.x, pos.x + size.x];
-                    debug?.(`Got bounds: ${pageTabListBounds}; ${size.y}`);
-                }
-                ret = findTabDetails(child, true, pageTabListBounds, np);
-                if (ret !== null) {
-                    if (ret.pageTabList === null) {
-                        ret.pageTabList = child.get_selection_iface();
-                        debug?.(`SEL: ${ret.pageTabList.get_n_selected_children()}, ${ret.pageTabList}`);
-                        for (let j = 0; j < child.get_child_count(); j++) {
-                            debug?.(`  ${j} / ${child.get_child_count()}: ${ret.pageTabList.is_child_selected(j)}`);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-        return ret;
-    }
-    // Find the tabs
-    print(`${pad}looking for tabs`);
-    let ret = null;
-    /**
-     * @type {[number, number, number, number][]}
-     */
-    let tabs = [];
-    const tabObjs = [];
-    let selectedIdx = -1;
-    for (let i = 0; i < node.get_child_count(); i++) {
-        const child = node.get_child_at_index(i);
-        if (child === null) {
-            continue;
-        }
-        if (child.get_role() !== Atspi.Role.PAGE_TAB) {
-            if (child.get_role() === Atspi.Role.PAGE_TAB_LIST) {
-                debug?.(`${pad}Found ANOTHER page tab list`);
-            }
-            ret = findTabDetails(child, true, pageTabListBounds, np);
-            if (ret !== null) {
-                break;
-            }
-        } else {
-            // Have a tab!
-            const p = pos(child);
-            /**
-             * @type{[number, number, number, number]}
-             */
-            const numPos = [p[0], p[1], p[2], p[3]];
-            tabs.push(numPos);
-            if (p[4] === "*") {
-                selectedIdx = i;
-            }
-            tabObjs.push(child);
-        }
-    }
-    if (tabs.length > 1 && tabs[0][0] === tabs[1][0]) {
-        // Vertical tabs, skip
-        return ret;
-    }
-    if (tabs.length === 0)
-        return ret;
-    return {
-        tabs: tabs,
-        tabObjs: tabObjs,
-        selectedIdx: selectedIdx,
-        pageTabList: null,
-        tabBounds: pageTabListBounds
-    };
 }
 
 /**
@@ -454,6 +340,7 @@ function findTabDetails2(node, haveWindow, pageTabListBounds, pad) {
         return null;
     }
 
+    const dummy = child.get_attributes();
     const ptls = child.get_collection_iface().get_matches(PAGE_TAB_LIST_MATCH_RULE, Atspi.CollectionSortOrder.CANONICAL,
         0, true
     );
@@ -479,11 +366,9 @@ function findTabDetails2(node, haveWindow, pageTabListBounds, pad) {
 
 function findTabs() {
     const desktop = Atspi.get_desktop(0);
-    //desktop.clear_cache();
     const nchild = desktop.get_child_count();
     for (let i = 0; i < nchild; i++) {
         const app = desktop.get_child_at_index(i);
-        //app.clear_cache();
         const start = new Date().getTime();
         const tabs = findTabDetails2(app, false, null, "--");
         const end = new Date().getTime();
@@ -495,19 +380,137 @@ function findTabs() {
     return null;
 }
 
+/**
+ * 
+ * @param {*} tabs 
+ * @param {Meta.Window} window 
+ */
+function adjustTabs(tabs, window) {
+    // If Code on high-DPI display, scale down
+    const disp = window.get_display();
+    const mon = window.get_monitor();
+    const scale = disp.get_monitor_scale(mon);
+    debug?.(`Scale: ${scale}`);
+    if (scale > 1 && window.wm_class === "Code") {
+
+    }
+}
+
+/**
+ * Interface for tab controller. Can give geometric bounds and switch active tab.
+ * 
+ * @typedef {object} TabController
+ * @property {function(): Array<number>} getBounds - Retrieves the bounds of the entire tab area.
+ * @property {function(): number} numTabs - Gets the number of tabs.
+ * @property {function(number): Array<number>} getTabRect - Gets the bounds of a particular tab. An array containing: x, y, width, height of the tab.
+ * @property {function(): number} getSelectedTab - Gets the selected tab index.
+ * @property {function(number): void} activateTab - Activates the tab at the specified index.
+ */
+
+/** @implements {TabController} */
+class AtspiTabController {
+    constructor() {
+        this.tabs = findTabs();
+        if (this.tabs === null) {
+            throw new Error("Unable to find tabs");
+        }
+        if (this.tabs.selectedIdx < 0 || this.tabs.selectedIdx >= this.tabs.tabs.length) {
+            throw new Error("No active tab found!");
+        }
+    }
+    getBounds() {
+        return this.tabs.tabBounds;
+    }
+    numTabs() {
+        return this.tabs.tabs.length;
+    }
+    getTabRect(index) {
+        return this.tabs.tabs[index];
+    }
+    getSelectedTab() {
+        return this.tabs.selectedIdx;
+    }
+    activateTab(index) {
+        this.tabs.pageTabList.select_child(index);
+        const action = this.tabs.tabObjs[index].get_action_iface();
+        if (action) {
+            action.do_action(0);
+        }
+    }
+}
+
+/** @implements {TabController} */
+class HackAdjustmentsTabController {
+    /**
+     * 
+     * @param {TabController} other 
+     * @param {Meta.Window} window
+     */
+    constructor(other, window) {
+        this.tabController = other;
+        this.adjX = (x) => x;
+        this.adjY = (y) => y;
+        this.adjW = (w) => w;
+        this.adjH = (h) => h;
+        // If Code on high-DPI display, scale down
+        const disp = window.get_display();
+        const mon = window.get_monitor();
+        const scale = disp.get_monitor_scale(mon);
+        debug?.(`Scale: ${scale}`);
+        if (scale > 1 && window.wm_class === "Code") {
+            // Divide by 2
+            const win_x = window.get_frame_rect().x;
+            const win_y = window.get_frame_rect().y;
+            this.adjX = (x) => (x - win_x) / 2;
+            this.adjY = (y) => (y - win_y) / 2;
+            this.adjW = (w) => w / 2;
+            this.adjH = (h) => h / 2;
+        } else if (window.wm_class === "org.mozilla.firefox") {
+            const br = window.get_buffer_rect();
+            const brx = br.x;
+            const bry = br.y;
+            const fr = window.get_frame_rect();
+            const frx = fr.x;
+            const fry = fr.y;
+            // Increase X and Y by 25;
+            this.adjX = (x) => x + (frx - brx);
+            this.adjY = (y) => y + (fry - bry);
+            debug?.(`Adjusting windows by ${frx - brx}, ${fry - bry}`);
+        }
+    }
+    getBounds() {
+        const ret = this.tabController.getBounds();
+        return [
+            this.adjX(ret[0]),
+            this.adjX(ret[1])
+        ];
+    }
+    numTabs() {
+        return this.tabController.numTabs();
+    }
+    getTabRect(index) {
+        const ret = this.tabController.getTabRect(index);
+        return [
+            this.adjX(ret[0]),
+            this.adjY(ret[1]),
+            this.adjW(ret[2]),
+            this.adjH(ret[3])
+        ];
+    }
+    getSelectedTab() {
+        return this.tabController.getSelectedTab();
+    }
+    activateTab(index) {
+        this.tabController.activateTab(index);
+    }
+}
+
 class TabSwitchGesture {
     constructor() {
-        //const seat = Clutter.get_default_backend().get_default_seat();
-        //this._virtualPointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
-        //this._pixelProcessor = new PixelProcessor();
         this.actor = null;
         this.cursor = null;
         this.cursorPt = [0, 0];
-        this.tabs = null;
-        this.tabObjs = null;
-        this.tabBounds = [0, 0];
-        this.selectedIdx = -1;
-        this.pageTabList = null;
+        this.tabController = null;
         Atspi.init();
     }
 
@@ -517,30 +520,17 @@ class TabSwitchGesture {
      */
     begin(movingRight) {
         debug?.("Begin");
-        const tabs = findTabs();
-        let rect = [0, 0, 100, 100];
-        if (!tabs) {
-            debug?.(`Unable to find tabs`);
-            return;
-        } else {
-            debug?.(`Found tabs: ${tabs.tabs}; ${tabs.selectedIdx}; ${tabs.tabBounds}`);
-            if (tabs.tabs.length > 0) {
-                rect = tabs.tabs[tabs.selectedIdx];
-            }
-        }
-        if (tabs.selectedIdx < 0 || tabs.selectedIdx >= tabs.tabs.length) {
-            debug?.("No active tab found!");
-            return;
-        }
+        this.tabController = new AtspiTabController();
+
+        /** @type Meta.Window */
+        const focused_window = global.display.get_focus_window();
+        this.tabController = new HackAdjustmentsTabController(this.tabController, focused_window);
+        // adjustTabs(tabs, focused_window);
 
         // Find start cursor location
-        this.tabs = tabs.tabs;
-        this.tabObjs = tabs.tabObjs;
-        this.selectedIdx = tabs.selectedIdx;
+        this.selectedIdx = this.tabController.getSelectedTab();
         debug?.(`selected index: ${this.selectedIdx}`);
-        this.pageTabList = tabs.pageTabList;
-        const tab = tabs.tabs[tabs.selectedIdx];
-        debug?.(`Tabs: ${tabs.tabs}; ${tab}`);
+        const tab = this.tabController.getTabRect(this.selectedIdx);
         const HOLDBACK = 3;  // Points to hold back from the edge
         this.cursorPt = [
             movingRight ? tab[0] + tab[2] - HOLDBACK : tab[0] + HOLDBACK,
@@ -550,11 +540,11 @@ class TabSwitchGesture {
         const colorDark = new Cogl.Color({ red: 100, green: 125, blue: 100, alpha: 128 });
         this.actor = new MyActor({
             background_color: colorDark,
-            x: rect[0], y: rect[1],
-            width: rect[2], height: rect[3]
+            x: tab[0], y: tab[1],
+            width: tab[2], height: tab[3]
         });
         const actors = global.get_window_actors();
-        const focused_window = global.display.get_focus_window();
+        debug?.(`WM class: ${focused_window.wm_class}`);
         const focused_actors = actors.filter(windowactor => windowactor.meta_window === focused_window);
         if (focused_actors.length !== 1) {
             debug?.('Wrong number of focused windows for tab switch gesture: ' + focused_actors.length);
@@ -576,13 +566,13 @@ class TabSwitchGesture {
      * @param {number} dx 
      */
     update(dx) {
-        if (this.tabs === null)
+        if (this.tabController === null)
             return;
         debug?.(`Update with ${dx}`);
         this.cursor.x += dx;
-        debug?.(`X: ${this.cursor.x}, TABS: ${this.tabs}`);
-        for (let i = 0; i < this.tabs.length; i++) {
-            const tab = this.tabs[i];
+        debug?.(`X: ${this.cursor.x}`);
+        for (let i = 0; i < this.tabController.numTabs(); i++) {
+            const tab = this.tabController.getTabRect(i);
             if (this.cursor.x >= tab[0] && this.cursor.x <= (tab[0] + tab[2])) {
                 // Update tab
                 if (i === this.selectedIdx) {
@@ -603,42 +593,20 @@ class TabSwitchGesture {
      * @param {boolean} isCancel 
      */
     end(isCancel) {
-        if (this.tabs === null)
+        if (this.tabController === null)
             return;
         debug?.("end");
 
         // Check active tab
-        debug?.(`X: ${this.cursor.x}, TABS: ${this.tabs}`);
-        this.pageTabList.select_child(this.selectedIdx);
-        const action = this.tabObjs[this.selectedIdx].get_action_iface();
-        if (action) {
-            action.do_action(0);
-        }
-        // for (let i = 0; i < this.tabs.length; i++) {
-        //     const tab = this.tabs[i];
-        //     if (this.cursor.x >= tab[0] && this.cursor.x <= (tab[0] + tab[2])) {
-        //         // Update tab
-        //         // if (this.pageTabList.is_child_selected(i)) {
-        //         //     break;
-        //         // }
-        //         debug?.(`MOVED TO TAB: ${i}`);
-        //         this.pageTabList.select_child(i);
-        //         const action = this.tabObjs[i].get_action_iface();
-        //         if (action) {
-        //             action.do_action(0);
-        //         }
-        //         break;
-        //     }
-        // }
+        debug?.(`X: ${this.cursor.x}`);
+        this.tabController.activateTab(this.selectedIdx);
 
         debug?.(`Done moving to new tab`);
         this.actor.get_parent().remove_child(this.actor);
         this.actor = null;
         this.cursor.get_parent().remove_child(this.cursor);
         this.cursor = null;
-        this.tabs = null;
-        this.tabObjs = null;
-        this.pageTabList = null;
+        this.tabController = null;
     }
 }
 
